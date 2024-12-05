@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude 3.5 Sonnet Chat Interface</title>
+    <style>
+        :root {
+            --primary-red: #FF0000;
+            --dark-red: #8B0000;
+            --black: #121212;
+            --purple: #800080;
+            --light-purple: #4B0082;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: var(--black);
+            color: white;
+            line-height: 1.6;
+        }
+
+        .chat-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: rgba(0,0,0,0.8);
+            border: 2px solid var(--purple);
+            border-radius: 15px;
+        }
+
+        .header {
+            text-align: center;
+            color: var(--primary-red);
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--purple);
+            padding-bottom: 10px;
+        }
+
+        .api-key-section {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #apiKeyInput {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid var(--purple);
+            border-radius: 5px;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        #validateApiKey {
+            padding: 10px 15px;
+            background-color: var(--purple);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .chat-window {
+            height: 500px;
+            overflow-y: auto;
+            border: 1px solid var(--light-purple);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: rgba(0,0,0,0.7);
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .user-message {
+            background-color: rgba(255,0,0,0.2);
+            border-left: 4px solid var(--primary-red);
+        }
+
+        .ai-message {
+            background-color: rgba(128,0,128,0.2);
+            border-left: 4px solid var(--purple);
+        }
+
+        .system-message {
+            background-color: rgba(0,128,0,0.2);
+            border-left: 4px solid green;
+        }
+
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"], input[type="password"] {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid var(--purple);
+            border-radius: 5px;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        button {
+            padding: 10px 15px;
+            background-color: var(--primary-red);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: var(--dark-red);
+        }
+
+        button:disabled {
+            background-color: gray;
+            cursor: not-allowed;
+        }
+
+        .date-filter {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        select {
+            padding: 10px;
+            border: 1px solid var(--purple);
+            border-radius: 5px;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+<div class="chat-container">
+    <h1 class="header">Claude 3.5 Sonnet Chat</h1>
+    
+    <div class="api-key-section">
+        <input 
+            type="password" 
+            id="apiKeyInput" 
+            placeholder="Enter your Anthropic API Key"
+        />
+        <button id="validateApiKey">Validate Key</button>
+    </div>
+
+    <div class="chat-window" id="chatWindow"></div>
+    <div class="input-area">
+        <input type="text" id="userInput" placeholder="Type your prompt here..." disabled />
+        <button id="sendButton" disabled>Send</button>
+    </div>
+    <div class="date-filter">
+        <label for="dateSelect">Show chat history:</label>
+        <select id="dateSelect">
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="dayBefore">Day Before</option>
+        </select>
+        <button id="filterButton">Filter</button>
+    </div>
+</div>
+
+<script>
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const validateApiKeyBtn = document.getElementById('validateApiKey');
+    const chatWindow = document.getElementById('chatWindow');
+    const userInput = document.getElementById('userInput');
+    const sendButton = document.getElementById('sendButton');
+    const dateSelect = document.getElementById('dateSelect');
+    const filterButton = document.getElementById('filterButton');
+
+    let apiKey = '';
+    let chatHistory = {
+        today: [],
+        yesterday: [],
+        dayBefore: []
+    };
+
+    validateApiKeyBtn.addEventListener('click', async () => {
+        const enteredApiKey = apiKeyInput.value.trim();
+        
+        if (!enteredApiKey) {
+            alert('Please enter an API key');
+            return;
+        }
+
+        try {
+            if (enteredApiKey.length > 10) {
+                apiKey = enteredApiKey;
+                apiKeyInput.disabled = true;
+                validateApiKeyBtn.disabled = true;
+                
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                
+                addMessage('system', 'API Key validated successfully!');
+            } else {
+                throw new Error('Invalid API Key');
+            }
+        } catch (error) {
+            alert('Invalid API Key. Please try again.');
+        }
+    });
+
+    function addMessage(role, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message', 
+            role === 'user' ? 'user-message' : 
+            role === 'system' ? 'system-message' : 
+            'ai-message'
+        );
+        messageDiv.innerHTML = `<strong>${
+            role === 'user' ? 'You' : 
+            role === 'system' ? 'System' : 
+            'Claude'
+        }:</strong> ${content}`;
+        chatWindow.appendChild(messageDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    async function getResponse(prompt) {
+        if (!apiKey) {
+            alert('Please validate API key first');
+            return;
+        }
+
+        try {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': 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,
+                    'Anthropic-Version': '2023-06-01'
+                },
+                body: JSON.stringify({
+                    model: "claude-3-5-sonnet-20241022", max_tokens: 1000,
+                    messages: [
+                        {
+                            role: "user",
+                            content: prompt
+                        }
+                    ]
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('API call failed');
+            }
+
+            const data = await response.json();
+            return data.content[0].text;
+        } catch (error) {
+            console.error('Error:', error);
+            return 'Sorry, there was an error processing your request.';
+        }
+    }
+
+    sendButton.addEventListener('click', async () => {
+        const prompt = userInput.value;
+        if (prompt) {
+            addMessage('user', prompt);
+            userInput.value = '';
+
+            const response = await getResponse(prompt);
+            addMessage('bot', response);
+
+            const today = new Date();
+            const dateKey = today.toLocaleDateString('en-GB');
+            chatHistory.today.push({ prompt, response, date: dateKey });
+        }
+    });
+
+    filterButton.addEventListener('click', () => {
+        const selectedDate = dateSelect.value;
+        chatWindow.innerHTML = '';
+
+        const dateKey = new Date();
+        if (selectedDate === 'yesterday') {
+            dateKey.setDate(dateKey.getDate() - 1);
+        } else if (selectedDate === 'dayBefore') {
+            dateKey.setDate(dateKey.getDate() - 2);
+        }
+
+        chatHistory[selectedDate].forEach(entry => {
+            addMessage('user', entry.prompt);
+            addMessage('bot', entry.response);
+        });
+    });
+</script>
+</body>
+</html>
